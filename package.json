@@ -1,0 +1,23 @@
+{
+  "name": "sercryptic",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@virtuals-protocol/game": "^0.1.6",
+    "@virtuals-protocol/game-twitter-plugin": "^0.1.1",
+    "axios": "^1.7.9",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "@types/node": "^20.8.3",
+    "@types/dotenv": "^8.2.0"
+  }
+}
