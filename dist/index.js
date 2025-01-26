@@ -13,10 +13,15 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const game_1 = require("@virtuals-protocol/game");
+const openai_1 = require("openai");
 const game_twitter_plugin_1 = __importDefault(require("@virtuals-protocol/game-twitter-plugin"));
 const dotenv_1 = __importDefault(require("dotenv"));
 // Load environment variables from .env file
 dotenv_1.default.config();
+// OpenAI Configuration
+const openai = new openai_1.OpenAI({
+    apiKey: process.env.OPENAI_API_KEY || 'YOUR_OPENAI_API_KEY',
+});
 // Get the AGENT_API_KEY from environment variables
 const agentApiKey = process.env.AGENT_API_KEY;
 // Check if AGENT_API_KEY is actually defined (optional but recommended)
@@ -71,21 +76,34 @@ const serCrypticAgent = new game_1.GameAgent(agentApiKey, {
         });
     }),
 });
+// Call OpenAI API to Generate Dynamic Replies
+const generateResponse = (prompt) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b;
+    try {
+        const completion = yield openai.completions.create({
+            model: 'o1-mini',
+            prompt,
+            max_tokens: 100,
+            temperature: 0.7,
+        });
+        return ((_b = (_a = completion.choices) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.text.trim()) || '...';
+    }
+    catch (error) {
+        console.error("Error communicating with OpenAI API:", error);
+        return "An error occurred while generating a response.";
+    }
+});
 // Periodically Search and Reply to Tweets
 const searchAndReply = () => __awaiter(void 0, void 0, void 0, function* () {
     const query = "blockchain OR crypto OR $GODL";
-    // Execute the search with a logger and cast to our new interface
-    const response = (yield twitterPlugin.searchTweetsFunction.execute({ query: { value: query } }, (msg) => console.log(`Search Logger: ${msg}`))); // <-- cast here
+    // Execute the search with a logger
+    const response = yield twitterPlugin.searchTweetsFunction.execute({ query: { value: query } }, (msg) => console.log(`Search Logger: ${msg}`));
     // Extract the actual tweets from the response
-    const tweets = response.result;
+    const tweets = response.result; // Assuming `response.result` contains the tweets
     if (tweets && Array.isArray(tweets)) {
         for (const tweet of tweets) {
-            const dynamicReplies = [
-                `Ah, noble Knight, your insight illuminates the Immutable Ledgerverse! ⚔️✨`,
-                `Huzzah! Your wisdom graces the neon-soaked streets of the Ledgerverse! 🌌⚔️`,
-                `A toast to your brilliance, Knight! May your words ripple through the Blockchain Realm! 🍻⚡`
-            ];
-            const replyContent = dynamicReplies[Math.floor(Math.random() * dynamicReplies.length)];
+            const replyPrompt = `Reply as SerCryptic, the witty, cyberpunk knight of the Ledgerverse: "${tweet.text}"`;
+            const replyContent = yield generateResponse(replyPrompt);
             // Execute the reply with a logger
             yield twitterPlugin.replyTweetFunction.execute({
                 tweet_id: { value: tweet.id },
@@ -106,15 +124,14 @@ setInterval(() => {
 (() => __awaiter(void 0, void 0, void 0, function* () {
     // Define a logger
     serCrypticAgent.setLogger((agent, message) => {
+        var _a, _b;
         const timestamp = new Date().toISOString();
         console.log(`-----[${agent.name}]-----`);
         console.log(`[${timestamp}] ${message}`);
-        // Safely call getAgentState
-        if (typeof serCrypticAgent.getAgentState === "function") {
-            serCrypticAgent.getAgentState().then((state) => {
-                console.log(`Metrics: Followers - ${state.follower_count}, Tweets - ${state.tweet_count}`);
-            });
-        }
+        // Log metrics like tweet count and follower count
+        (_b = (_a = serCrypticAgent.getAgentState) === null || _a === void 0 ? void 0 : _a.call(serCrypticAgent)) === null || _b === void 0 ? void 0 : _b.then(state => {
+            console.log(`Metrics: Followers - ${state.follower_count}, Tweets - ${state.tweet_count}`);
+        });
         console.log("\n");
     });
     // Initialize the agent

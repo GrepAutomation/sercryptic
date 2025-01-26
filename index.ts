@@ -1,17 +1,24 @@
 import { GameAgent, ExecutableGameFunctionResponse } from "@virtuals-protocol/game";
+import { OpenAI } from 'openai';
 import TwitterPlugin from "@virtuals-protocol/game-twitter-plugin";
 import dotenv from 'dotenv';
 
 // Load environment variables from .env file
 dotenv.config();
 
-// Define an interface describing the actual plugin response shape
+// Define the interface so TypeScript knows about "result"
 interface SearchTweetsFunctionResponse extends ExecutableGameFunctionResponse {
   result: Array<{
     id: string;
-    // ...any other tweet properties you need
+    text?: string;
+    // ... any other tweet fields you need
   }>;
 }
+
+// OpenAI Configuration
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY || 'YOUR_OPENAI_API_KEY',
+});
 
 // Get the AGENT_API_KEY from environment variables
 const agentApiKey = process.env.AGENT_API_KEY!;
@@ -79,28 +86,40 @@ const serCrypticAgent = new GameAgent(agentApiKey, {
   }),
 });
 
+// Call OpenAI API to Generate Dynamic Replies
+const generateResponse = async (prompt: string): Promise<string> => {
+  try {
+    const completion = await openai.completions.create({
+      model: 'o1-mini',
+      prompt,
+      max_tokens: 100,
+      temperature: 0.7,
+    });
+
+    return completion.choices?.[0]?.text.trim() || '...';
+  } catch (error) {
+    console.error("Error communicating with OpenAI API:", error);
+    return "An error occurred while generating a response.";
+  }
+};
+
 // Periodically Search and Reply to Tweets
 const searchAndReply = async () => {
   const query = "blockchain OR crypto OR $GODL";
 
-  // Execute the search with a logger and cast to our new interface
-  const response = (await twitterPlugin.searchTweetsFunction.execute(
+  // Execute the search with a logger
+  const response = await twitterPlugin.searchTweetsFunction.execute(
     { query: { value: query } },
     (msg) => console.log(`Search Logger: ${msg}`)
-  )) as SearchTweetsFunctionResponse; // <-- cast here
+  ) as SearchTweetsFunctionResponse;
 
   // Extract the actual tweets from the response
-  const tweets = response.result;
+  const tweets = response.result; // Assuming `response.result` contains the tweets
 
   if (tweets && Array.isArray(tweets)) {
     for (const tweet of tweets) {
-      const dynamicReplies = [
-        `Ah, noble Knight, your insight illuminates the Immutable Ledgerverse! ⚔️✨`,
-        `Huzzah! Your wisdom graces the neon-soaked streets of the Ledgerverse! 🌌⚔️`,
-        `A toast to your brilliance, Knight! May your words ripple through the Blockchain Realm! 🍻⚡`
-      ];
-
-      const replyContent = dynamicReplies[Math.floor(Math.random() * dynamicReplies.length)];
+      const replyPrompt = `Reply as SerCryptic, the witty, cyberpunk knight of the Ledgerverse: "${tweet.text}"`;
+      const replyContent = await generateResponse(replyPrompt);
 
       // Execute the reply with a logger
       await twitterPlugin.replyTweetFunction.execute(
@@ -130,12 +149,10 @@ setInterval(() => {
     console.log(`-----[${agent.name}]-----`);
     console.log(`[${timestamp}] ${message}`);
 
-    // Safely call getAgentState
-    if (typeof serCrypticAgent.getAgentState === "function") {
-      serCrypticAgent.getAgentState().then((state) => {
-        console.log(`Metrics: Followers - ${state.follower_count}, Tweets - ${state.tweet_count}`);
-      });
-    }
+    // Log metrics like tweet count and follower count
+    serCrypticAgent.getAgentState?.()?.then(state => {
+      console.log(`Metrics: Followers - ${state.follower_count}, Tweets - ${state.tweet_count}`);
+    });
     console.log("\n");
   });
 
