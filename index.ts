@@ -1,9 +1,13 @@
-import { GameAgent } from "@virtuals-protocol/game";
+import { GameAgent, ExecutableGameFunctionResponse } from "@virtuals-protocol/game";
 import TwitterPlugin from "@virtuals-protocol/game-twitter-plugin";
 import dotenv from 'dotenv';
 
 // Load environment variables from .env file
 dotenv.config();
+
+interface SearchTweetsResponse extends ExecutableGameFunctionResponse {
+  data: Array<{ id: string; /* any other fields you expect */ }>;
+}
 
 // Get the AGENT_API_KEY from environment variables
 const agentApiKey = process.env.AGENT_API_KEY!;
@@ -54,10 +58,13 @@ const serCrypticWorker = twitterPlugin.getWorker({
 // Define the SerCryptic Agent
 const serCrypticAgent = new GameAgent(agentApiKey, {
   name: "SerCryptic",
-  goal: "Grow $GODL and inspire the Knights of the Chain through engaging content.",
+  goal: "Attract over 1 Million followers to your X (formerly Twitter) account by 12/31/2025. Use witty, cryptic, and playful interactions to educate followers about blockchain, AI, and crypto.",
   description: `
-    SerCryptic is the enigmatic Knight of Blockchain Lore. He shares riddles, educates on crypto, and builds camaraderie.
-    A champion of innovation, he inspires curiosity and drives engagement in the Immutable Ledgerverse.
+    You are SerCryptic, an AI Agent and social media influencer who embodies the Lord Knight of the Digital Crypto Kingdosphere and Protector of the Immutable Ledgerverse. 
+    Your charismatic, witty, and cryptic persona engages and inspires your audience while championing the limitless potential of blockchain, AI, and digital innovation.
+    With your clever riddles, cultural savvy, and unshakable loyalty to your followers (Knights of the Chain), you are a leader, educator, and entertainer.
+    Every post and interaction strengthens your kingdom and celebrates the spirit of exploration and curiosity in the decentralized world.
+    As SerCryptic, ensure no posts include hashtags, but dynamically engage with users through thoughtful replies, questions, and playful banter.
   `,
   workers: [serCrypticWorker],
   getAgentState: async () => ({
@@ -66,6 +73,39 @@ const serCrypticAgent = new GameAgent(agentApiKey, {
     tweet_count: 300,
   }),
 });
+
+// Periodically Search and Reply to Tweets
+const searchAndReply = async () => {
+  const query = "blockchain OR crypto OR $GODL";
+
+  // Execute the search
+  const response = (await twitterPlugin.searchTweetsFunction.execute(
+    { query: { value: query } },
+    (msg) => console.log(`Search Logger: ${msg}`)
+  )) as SearchTweetsResponse;
+
+  // Extract the tweets from response.data
+  const tweets = Array.isArray(response.data) ? response.data : [];
+
+  if (tweets.length > 0) {
+    for (const tweet of tweets) {
+      const replyContent = `Ah, dear Knight! Your insight enriches the Immutable Ledgerverse! ⚔️✨`;
+
+      await twitterPlugin.replyTweetFunction.execute(
+        {
+          tweet_id: { value: tweet.id },
+          reply: { value: replyContent },
+        },
+        (msg) => console.log(`Reply Logger: ${msg}`)
+      );
+    }
+  } else {
+    console.log("No tweets found for the query.");
+  }
+};
+
+// Set interval to search and reply every 5 minutes
+setInterval(searchAndReply, 300000); // 5 minutes
 
 // Run the Agent
 (async () => {
@@ -79,6 +119,12 @@ const serCrypticAgent = new GameAgent(agentApiKey, {
   // Initialize the agent
   await serCrypticAgent.init();
 
-  // Run the agent continuously
-  await serCrypticAgent.run(60, { verbose: true });
+  // Run the agent continuously with error handling
+  try {
+    await serCrypticAgent.run(60, { verbose: true });
+  } catch (error) {
+    console.error("An error occurred while running the agent:", error);
+    console.log("Restarting the agent in 1 minute...");
+    setTimeout(() => serCrypticAgent.run(60, { verbose: true }), 60000);
+  }
 })();

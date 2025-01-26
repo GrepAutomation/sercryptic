@@ -53,10 +53,13 @@ const serCrypticWorker = twitterPlugin.getWorker({
 // Define the SerCryptic Agent
 const serCrypticAgent = new game_1.GameAgent(agentApiKey, {
     name: "SerCryptic",
-    goal: "Grow $GODL and inspire the Knights of the Chain through engaging content.",
+    goal: "Attract over 1 Million followers to your X (formerly Twitter) account by 12/31/2025. Use witty, cryptic, and playful interactions to educate followers about blockchain, AI, and crypto.",
     description: `
-    SerCryptic is the enigmatic Knight of Blockchain Lore. He shares riddles, educates on crypto, and builds camaraderie.
-    A champion of innovation, he inspires curiosity and drives engagement in the Immutable Ledgerverse.
+    You are SerCryptic, an AI Agent and social media influencer who embodies the Lord Knight of the Digital Crypto Kingdosphere and Protector of the Immutable Ledgerverse. 
+    Your charismatic, witty, and cryptic persona engages and inspires your audience while championing the limitless potential of blockchain, AI, and digital innovation.
+    With your clever riddles, cultural savvy, and unshakable loyalty to your followers (Knights of the Chain), you are a leader, educator, and entertainer.
+    Every post and interaction strengthens your kingdom and celebrates the spirit of exploration and curiosity in the decentralized world.
+    As SerCryptic, ensure no posts include hashtags, but dynamically engage with users through thoughtful replies, questions, and playful banter.
   `,
     workers: [serCrypticWorker],
     getAgentState: () => __awaiter(void 0, void 0, void 0, function* () {
@@ -67,6 +70,28 @@ const serCrypticAgent = new game_1.GameAgent(agentApiKey, {
         });
     }),
 });
+// Periodically Search and Reply to Tweets
+const searchAndReply = () => __awaiter(void 0, void 0, void 0, function* () {
+    const query = "blockchain OR crypto OR $GODL";
+    // Execute the search
+    const response = (yield twitterPlugin.searchTweetsFunction.execute({ query: { value: query } }, (msg) => console.log(`Search Logger: ${msg}`)));
+    // Extract the tweets from response.data
+    const tweets = Array.isArray(response.data) ? response.data : [];
+    if (tweets.length > 0) {
+        for (const tweet of tweets) {
+            const replyContent = `Ah, dear Knight! Your insight enriches the Immutable Ledgerverse! ⚔️✨`;
+            yield twitterPlugin.replyTweetFunction.execute({
+                tweet_id: { value: tweet.id },
+                reply: { value: replyContent },
+            }, (msg) => console.log(`Reply Logger: ${msg}`));
+        }
+    }
+    else {
+        console.log("No tweets found for the query.");
+    }
+});
+// Set interval to search and reply every 5 minutes
+setInterval(searchAndReply, 300000); // 5 minutes
 // Run the Agent
 (() => __awaiter(void 0, void 0, void 0, function* () {
     // Define a logger
@@ -77,6 +102,13 @@ const serCrypticAgent = new game_1.GameAgent(agentApiKey, {
     });
     // Initialize the agent
     yield serCrypticAgent.init();
-    // Run the agent continuously
-    yield serCrypticAgent.run(60, { verbose: true });
+    // Run the agent continuously with error handling
+    try {
+        yield serCrypticAgent.run(60, { verbose: true });
+    }
+    catch (error) {
+        console.error("An error occurred while running the agent:", error);
+        console.log("Restarting the agent in 1 minute...");
+        setTimeout(() => serCrypticAgent.run(60, { verbose: true }), 60000);
+    }
 }))();
