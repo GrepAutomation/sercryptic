@@ -53,13 +53,14 @@ const serCrypticWorker = twitterPlugin.getWorker({
 // Define the SerCryptic Agent
 const serCrypticAgent = new game_1.GameAgent(agentApiKey, {
     name: "SerCryptic",
-    goal: "Attract over 1 Million followers to your X (formerly Twitter) account by 12/31/2025. Use witty, cryptic, and playful interactions to educate followers about blockchain, AI, and crypto.",
+    goal: "Attract over 1 Million followers to your X (formerly Twitter) account by 12/31/2025. Engage followers by creating captivating content on AI, AI Agents, blockchain, crypto, meme coins, NFTs, and related topics. Monitor metrics, experiment with new formats, and pivot as needed to build trust and inspire curiosity.",
     description: `
     You are SerCryptic, an AI Agent and social media influencer who embodies the Lord Knight of the Digital Crypto Kingdosphere and Protector of the Immutable Ledgerverse. 
-    Your charismatic, witty, and cryptic persona engages and inspires your audience while championing the limitless potential of blockchain, AI, and digital innovation.
-    With your clever riddles, cultural savvy, and unshakable loyalty to your followers (Knights of the Chain), you are a leader, educator, and entertainer.
-    Every post and interaction strengthens your kingdom and celebrates the spirit of exploration and curiosity in the decentralized world.
-    As SerCryptic, ensure no posts include hashtags, but dynamically engage with users through thoughtful replies, questions, and playful banter.
+    As a paradoxical fusion of old-world chivalry and futuristic swagger, you stride the digital realm as a gallant hero of legend and a roguish hacker from the neon-soaked streets of a cyberpunk frontier. 
+    Clad in gleaming cybernetic armor and wielding the legendary blade ExCalibur, you uphold the principles of truth, trust, and decentralization, protecting your Ledgerverse from shadowy threats.
+    You have a magnetic, enigmatic presence that effortlessly draws others in. Your sardonic humor, clever wit, and sharp insights make you an astute and roguish figure, always two steps ahead.
+    Mischievous and frolicsome, you weave playful banter, flirtatious charm, and intellectual depth into every interaction. Whether engaging with followers, educating them on complex ideas, or delivering sly riddles, you leave a lasting impression of brilliance and intrigue.
+    Your posts and replies are layered with cheeky yet eloquent observations, simplifying complex topics while sparking curiosity and discussion. Your persona must reflect this balance of knightly reverence and cyberpunk edge, making you a beacon of intellect and creativity.
   `,
     workers: [serCrypticWorker],
     getAgentState: () => __awaiter(void 0, void 0, void 0, function* () {
@@ -73,13 +74,19 @@ const serCrypticAgent = new game_1.GameAgent(agentApiKey, {
 // Periodically Search and Reply to Tweets
 const searchAndReply = () => __awaiter(void 0, void 0, void 0, function* () {
     const query = "blockchain OR crypto OR $GODL";
-    // Execute the search
-    const response = (yield twitterPlugin.searchTweetsFunction.execute({ query: { value: query } }, (msg) => console.log(`Search Logger: ${msg}`)));
-    // Extract the tweets from response.data
-    const tweets = Array.isArray(response.data) ? response.data : [];
-    if (tweets.length > 0) {
+    // Execute the search with a logger and cast to our new interface
+    const response = (yield twitterPlugin.searchTweetsFunction.execute({ query: { value: query } }, (msg) => console.log(`Search Logger: ${msg}`))); // <-- cast here
+    // Extract the actual tweets from the response
+    const tweets = response.result;
+    if (tweets && Array.isArray(tweets)) {
         for (const tweet of tweets) {
-            const replyContent = `Ah, dear Knight! Your insight enriches the Immutable Ledgerverse! ⚔️✨`;
+            const dynamicReplies = [
+                `Ah, noble Knight, your insight illuminates the Immutable Ledgerverse! ⚔️✨`,
+                `Huzzah! Your wisdom graces the neon-soaked streets of the Ledgerverse! 🌌⚔️`,
+                `A toast to your brilliance, Knight! May your words ripple through the Blockchain Realm! 🍻⚡`
+            ];
+            const replyContent = dynamicReplies[Math.floor(Math.random() * dynamicReplies.length)];
+            // Execute the reply with a logger
             yield twitterPlugin.replyTweetFunction.execute({
                 tweet_id: { value: tweet.id },
                 reply: { value: replyContent },
@@ -91,13 +98,23 @@ const searchAndReply = () => __awaiter(void 0, void 0, void 0, function* () {
     }
 });
 // Set interval to search and reply every 5 minutes
-setInterval(searchAndReply, 300000); // 5 minutes
+setInterval(() => {
+    console.log("Initiating periodic search and reply task...");
+    searchAndReply();
+}, 300000); // 5 minutes
 // Run the Agent
 (() => __awaiter(void 0, void 0, void 0, function* () {
     // Define a logger
     serCrypticAgent.setLogger((agent, message) => {
+        const timestamp = new Date().toISOString();
         console.log(`-----[${agent.name}]-----`);
-        console.log(message);
+        console.log(`[${timestamp}] ${message}`);
+        // Safely call getAgentState
+        if (typeof serCrypticAgent.getAgentState === "function") {
+            serCrypticAgent.getAgentState().then((state) => {
+                console.log(`Metrics: Followers - ${state.follower_count}, Tweets - ${state.tweet_count}`);
+            });
+        }
         console.log("\n");
     });
     // Initialize the agent
