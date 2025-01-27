@@ -1,24 +1,10 @@
-import { GameAgent, ExecutableGameFunctionResponse } from "@virtuals-protocol/game";
-import { OpenAI } from 'openai';
+import { GameAgent } from "@virtuals-protocol/game";
 import TwitterPlugin from "@virtuals-protocol/game-twitter-plugin";
+import OpenAI from "openai";
 import dotenv from 'dotenv';
 
 // Load environment variables from .env file
 dotenv.config();
-
-// Define the interface so TypeScript knows about "result"
-interface SearchTweetsFunctionResponse extends ExecutableGameFunctionResponse {
-  result: Array<{
-    id: string;
-    text?: string;
-    // ... any other tweet fields you need
-  }>;
-}
-
-// OpenAI Configuration
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || 'YOUR_OPENAI_API_KEY',
-});
 
 // Get the AGENT_API_KEY from environment variables
 const agentApiKey = process.env.AGENT_API_KEY!;
@@ -45,6 +31,11 @@ if (
 ) {
   throw new Error('One or more Twitter API credentials are not defined in the environment variables.');
 }
+
+// Initialize OpenAI
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY || 'YOUR_OPENAI_API_KEY',
+});
 
 // Initialize the Twitter Plugin
 const twitterPlugin = new TwitterPlugin({
@@ -86,56 +77,84 @@ const serCrypticAgent = new GameAgent(agentApiKey, {
   }),
 });
 
-// Call OpenAI API to Generate Dynamic Replies
+// Utility to Retry API Calls with Exponential Backoff
+const retryWithBackoff = async (fn: () => Promise<any>, retries = 3, delay = 1000): Promise<any> => {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retries > 0) {
+      console.warn(`Retrying... (${retries} retries left)`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return retryWithBackoff(fn, retries - 1, delay * 2);
+    } else {
+      throw error;
+    }
+  }
+};
+
+// Generate an AI-based reply
 const generateResponse = async (prompt: string): Promise<string> => {
   try {
-    const completion = await openai.completions.create({
-      model: 'o1-mini',
-      prompt,
+    const completion = await openai.chat.completions.create({
+      model: "o1-mini-2024-09-12",
+      messages: [{ role: "user", content: prompt }],
       max_tokens: 100,
       temperature: 0.7,
     });
-
-    return completion.choices?.[0]?.text.trim() || '...';
+    const content = completion.choices?.[0]?.message?.content;
+    return content ? content.trim() : "No response generated.";
   } catch (error) {
-    console.error("Error communicating with OpenAI API:", error);
+    console.error("Error generating response from OpenAI:", error);
     return "An error occurred while generating a response.";
   }
+};
+
+// Filter and Remove Hashtags from Content
+const removeHashtags = (content: string): string => {
+  return content.replace(/#\w+/g, '').trim();
 };
 
 // Periodically Search and Reply to Tweets
 const searchAndReply = async () => {
   const query = "blockchain OR crypto OR $GODL";
 
-  // Execute the search with a logger
-  const response = await twitterPlugin.searchTweetsFunction.execute(
-    { query: { value: query } },
-    (msg) => console.log(`Search Logger: ${msg}`)
-  ) as SearchTweetsFunctionResponse;
+  try {
+    const response = await retryWithBackoff(() => 
+      twitterPlugin.searchTweetsFunction.execute(
+        { query: { value: query } },
+        (msg) => console.log(`Search Logger: ${msg}`)
+      )
+    );
 
-  // Extract the actual tweets from the response
-  const tweets = response.result; // Assuming `response.result` contains the tweets
+    const tweets = response.result;
 
-  if (tweets && Array.isArray(tweets)) {
-    for (const tweet of tweets) {
-      const replyPrompt = `Reply as SerCryptic, the witty, cyberpunk knight of the Ledgerverse: "${tweet.text}"`;
-      const replyContent = await generateResponse(replyPrompt);
+    if (tweets && Array.isArray(tweets)) {
+      console.log(`Found ${tweets.length} tweets. Preparing to reply...`);
+      for (const tweet of tweets) {
+        if (!tweet.text || tweet.text.length < 5) continue;
 
-      // Execute the reply with a logger
-      await twitterPlugin.replyTweetFunction.execute(
-        {
-          tweet_id: { value: tweet.id },
-          reply: { value: replyContent },
-        },
-        (msg) => console.log(`Reply Logger: ${msg}`)
-      );
+        const replyPrompt = `Respond as SerCryptic, a witty knight of the Ledgerverse: \"${tweet.text}\"`;
+        const replyContent = await generateResponse(replyPrompt);
+        const sanitizedReply = removeHashtags(replyContent);
+
+        console.log(`Replying to tweet ID: ${tweet.id}`);
+        await twitterPlugin.replyTweetFunction.execute(
+          {
+            tweet_id: { value: tweet.id },
+            reply: { value: sanitizedReply },
+          },
+          (msg) => console.log(`Reply Logger: ${msg}`)
+        );
+      }
+    } else {
+      console.log("No tweets found for the query.");
     }
-  } else {
-    console.log("No tweets found for the query.");
+  } catch (error) {
+    console.error("Search failed or reply process encountered an issue:", error);
   }
 };
 
-// Set interval to search and reply every 5 minutes
+// Set Interval to Search and Reply Every 5 Minutes
 setInterval(() => {
   console.log("Initiating periodic search and reply task...");
   searchAndReply();
@@ -143,23 +162,22 @@ setInterval(() => {
 
 // Run the Agent
 (async () => {
-  // Define a logger
+  // Define a Logger
   serCrypticAgent.setLogger((agent, message) => {
     const timestamp = new Date().toISOString();
     console.log(`-----[${agent.name}]-----`);
     console.log(`[${timestamp}] ${message}`);
 
-    // Log metrics like tweet count and follower count
-    serCrypticAgent.getAgentState?.()?.then(state => {
-      console.log(`Metrics: Followers - ${state.follower_count}, Tweets - ${state.tweet_count}`);
-    });
+    if (typeof serCrypticAgent.getAgentState === "function") {
+      serCrypticAgent.getAgentState().then((state) => {
+        console.log(`Metrics: Followers - ${state.follower_count}, Tweets - ${state.tweet_count}`);
+      });
+    }
     console.log("\n");
   });
 
-  // Initialize the agent
   await serCrypticAgent.init();
 
-  // Run the agent continuously with error handling
   try {
     await serCrypticAgent.run(60, { verbose: true });
   } catch (error) {
